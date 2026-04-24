@@ -58,6 +58,12 @@ npm start
 
 Caddy / nginx in front doing TLS + injecting a `X-Proxy-Secret` header is the intended topology. See the example.
 
+---
+
+> 🤖 **Full disclosure:** I didn't even write this README. An LLM did. I read it once, nodded, and pushed. If a sentence lands flat, blame the machine; the PR button is right up there.
+
+---
+
 ## License
 
 MIT. Take it, improve it, don't ship it with trackers.
