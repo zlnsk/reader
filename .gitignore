@@ -1,0 +1,31 @@
+node_modules/
+.next/
+out/
+dist/
+build/
+.env
+.env.*
+!.env.example
+ecosystem.config.js
+uploads/
+covers/
+*.log
+.DS_Store
+.vscode/
+.idea/
+
+# backups
+*.bak*
+*.tsbuildinfo
+core.*
+*.pre-*-bak
+*.pre-failsafe-*
+
+# backup/audit snapshots
+*.bak
+*.bak-*
+*.bak*
+*.orig
+*.old
+*.pre-*
+*-pre-*
