@@ -1,69 +1,98 @@
-# reader
+# Reader
 
-> A reading app that respects you, your eyes, and your attention span.
+Private reading app. Upload a book (PDF / EPUB / DOCX / TXT / MD), get AI-cleaned text, read it in a beautifully typeset paginated or scroll view, with high-quality TTS narration powered by OpenAI voice models via OpenRouter.
 
-Uploads books. Strips the terrible OCR noise. Reads them to you out loud when you're too tired to read. Syncs progress across devices. No ads, no analytics, no referral URL sneakily stamped on the cover.
+## Features
 
----
+- **Paginated or scroll reading** with full typography controls (serif/sans fonts, size, line-height, column width, margins, theme, justify, hyphens) — per-user, synced across devices.
+- **AI extraction** (PDF text-layer, EPUB, DOCX, TXT/MD) via `pdf-parse`, `epub2`, `mammoth`. Text cleanup via OpenRouter → `anthropic/claude-haiku-4.5`:
+  - Restores dropped apostrophes/contractions (`didn t` → `didn't`)
+  - Drops publisher front-matter, copyright pages, ISBN blocks, printing history
+  - Keeps only: title, TOC, prologue/foreword/preface, main body
+- **Covers**: first PDF page via `pdftoppm`; EPUB cover extracted from OPF manifest.
+- **High-quality TTS** via OpenRouter → `openai/gpt-audio-mini` (8 voices: `alloy`, `echo`, `fable`, `onyx`, `nova`, `shimmer`, `coral`, `sage`). Audio cached per-chapter-per-voice in Postgres.
+  - Starts reading from the paragraph currently visible on screen.
+  - Smooth paragraph-level highlighting with a per-paragraph progress underline.
+  - Auto-advances through chapters.
+- **PWA**: installable, offline-capable (cached app shell + book pages).
+- **LibGen search + download** (uses `libgen.vg` / `.la` / `.gl` / `.bz` mirrors, defaults to EPUB).
+- **Reading position sync** (paragraph-anchored, survives font/size changes; syncs across laptop & mobile for the same signed-in email).
+- **10-book limit per user** with delete from the library.
 
-## What it is
+## Stack
 
-A self-hosted reading stack that takes **PDFs, EPUBs, DOCX, TXT, and Markdown** (or things you pull from **OPDS** / **LibGen**) and turns them into a clean, long-form reading experience. Then optionally reads them to you in the voice of your choosing, because audiobooks are expensive and you have an LLM budget anyway.
+- Next.js 15 (App Router, TypeScript), Tailwind v4
+- Postgres 15+
+- PM2 process manager
+- Caddy reverse proxy (OTP gating via `shared-auth` HMAC session cookie)
+- OpenRouter (Anthropic + OpenAI audio)
+- `poppler-utils` (PDF cover rendering)
 
-- **Ingest** via `pdf-parse`, `epub2`, `mammoth` + LibGen and OPDS clients for books you already have the right to read
-- **AI cleanup** via OpenRouter — because raw PDF text looks like it was airdropped from a helicopter into a blender
-- **Text-to-speech** via OpenAI's audio API, cached server-side by content-hash so replaying a paragraph doesn't re-bill
-- **Send-to-Kindle** over email, because sometimes e-ink is the only place to finish a 900-page Russian novel
-- **Offline reading** with IndexedDB + a real service worker — subway tunnels don't interrupt
-- **OPDS server + client**: Reader speaks OPDS both ways, so any OPDS-compatible reader on the planet can browse your library, and Reader can browse anyone else's
+## Deploy
 
-## Why I wrote it
-
-Kindle wants money. Apple Books is a walled garden with excellent escape-proof doors. Calibre has the UI of an early WinAmp skin. Every mainstream PDF reader now insists on adding "industry-leading AI features" *and* sticking a chatbot in the corner of my novel — I wanted to read, not ask Clippy what happens in chapter four.
-
-So I wrote this. With **tremendous** help from an LLM, to be straight about it. I do not hand-write `pdf-parse` error-handling at 23:00. Nobody should. This is the future; I like this future.
-
----
-
-> 📚 **A small legal note, delivered with a warm smile:** only download books you actually own. The LibGen + OPDS integrations exist so you can re-ingest the books you've already paid for — the one on your shelf, the one on the Kindle you left on a plane, the PDF your colleague mailed you after a conference. If you're using this to hoard copyrighted fiction you never intended to buy, that's on you, not on the software. Authors like eating. Be excellent to each other. 🙂
-
----
-
-## Design
-
-A **paper-tone palette** — `#FBF7F1` warm page, `#1a1714` deep ink — calibrated not to set fire to your retinas at midnight. **Source Serif 4** for body copy, **JetBrains Mono** for metadata, system-ui for UI chrome. The typographic scale runs 11 → 40 px with 1.6 line-height on body — a measure your English teacher would grudgingly approve.
-
-Every reading preference (typeface, size, line-height, margins, theme) persists per-device. Dark mode is proper dark mode, not `filter: invert(1)` like some apps I will decline to name.
-
-## Security & privacy
-
-- **Your library stays yours.** Postgres on one box, encrypted backups at rest, no CDN, no replication across borders except for the third-party API calls you explicitly trigger.
-- **No third-party identifiers.** Exactly one session cookie. App passwords for OPDS clients are scrypt-hashed; main login uses OTP via email magic-code, so there's no long-lived password to lose.
-- **DRM-encumbered e-books are unsupported by design.** If you need to strip DRM, that's a decision between you and your lawyer, and it doesn't belong in this codebase.
-- **No telemetry. No analytics. No beacons.** The only network traffic leaving your server on a typical read is: nothing. The only traffic on an AI-cleanup or TTS action is: one request to the provider you picked.
-- **App passwords can be revoked individually** from the web settings page, so losing a Kindle doesn't mean rotating your whole account.
-
-## Run it
-
-Needs Node 22+, Postgres 17, OpenRouter API key, and an OpenAI key for the audio model. Symlink the `shared-auth` module via `SHARED_MODULES_DIR` (or vendor the module inline — your call).
+Assumes Debian/Ubuntu with Node 22+, Postgres, Caddy, PM2 and `poppler-utils` installed.
 
 ```bash
+# 1) Postgres
+sudo -u postgres psql -c "CREATE ROLE reader LOGIN PASSWORD '<pg-pass>';"
+sudo -u postgres psql -c "CREATE DATABASE reader OWNER reader;"
+sudo -u postgres psql -d reader -f sql/001_init.sql
+
+# 2) App
+cd .
 cp ecosystem.config.example.js ecosystem.config.js
-# fill in the REPLACE_ME values (OPENROUTER_API_KEY, PGPASSWORD, etc.)
+# Edit ecosystem.config.js and replace every REPLACE_ME value:
+#   - PROXY_SECRET (32-byte base64, shared with Caddy)
+#   - OTP_SESSION_SECRET (32-byte base64)
+#   - OTP_JMAP_* (JMAP mail credentials for sending OTP codes)
+#   - PGPASSWORD
+#   - OPENROUTER_API_KEY
+#   - OTP_ALLOWED_EMAILS (comma-separated)
+
 npm install
+# Link the OTP auth module alongside (assumes . exists)
+ln -sfn . node_modules/shared-auth
 npm run build
-npm start
-# or: pm2 start ecosystem.config.js
+pm2 start ecosystem.config.js
+pm2 save
 ```
 
-Caddy / nginx in front doing TLS + injecting a `X-Proxy-Secret` header is the intended topology. See the example.
+Caddy snippet (for this app behind a reverse proxy at path `/Reader`):
 
----
+```caddyfile
+@reader path_regexp ^(?i)/Reader(/.*)?$
+handle @reader {
+  reverse_proxy 127.0.0.1:3017 {
+    header_up Host {host}
+    header_up X-Forwarded-Host {host}
+    header_up X-Forwarded-Proto "https"
+    header_up X-Proxy-Secret "<matches PROXY_SECRET>"
+  }
+}
+```
 
-> 🤖 **Full disclosure:** I didn't even write this README. An LLM did. I read it once, nodded, and pushed. If a sentence lands flat, blame the machine; the PR button is right up there.
+## Routes
 
----
+| Path | Purpose |
+|---|---|
+| `/` | Library grid (covers + progress) |
+| `/upload` | File upload + extraction progress |
+| `/search` | LibGen search + one-click import |
+| `/book/[id]` | Reader with typography prefs + TTS |
+| `/api/auth/[action]` | OTP email auth (login / verify / send-code / logout) |
+| `/api/upload` | Multipart upload → extract pipeline |
+| `/api/books/[id]` | Book status + delete |
+| `/api/books/[id]/cover` | JPEG/PNG cover |
+| `/api/progress` | Save reading position (paragraph-anchored) |
+| `/api/prefs` | User typography + TTS voice preferences |
+| `/api/tts/[bookId]/[chapterIdx]` | Streaming WAV synthesis (with cache + start-from-paragraph mode) |
+| `/api/libgen/search` | LibGen search proxy |
+| `/api/libgen/download` | Fetch + extract a LibGen book |
+
+## Schema
+
+See `sql/001_init.sql`.
 
 ## License
 
-MIT. Take it, improve it, don't ship it with trackers.
+MIT

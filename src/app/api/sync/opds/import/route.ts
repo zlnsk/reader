@@ -32,7 +32,7 @@ function isPrivateAddress(ip: string): boolean {
     if (p[0] === 169 && p[1] === 254) return true;
     if (p[0] === 172 && p[1] >= 16 && p[1] <= 31) return true;
     if (p[0] === 192 && p[1] === 168) return true;
-    if (p[0] === 100 && p[1] >= 64 && p[1] <= 127) return true; // CGNAT range
+    if (p[0] === 100 && p[1] >= 64 && p[1] <= 127) return true; // CGNAT, Tailscale
     if (p[0] === 0) return true;
     if (p[0] >= 224) return true; // multicast + reserved
     return false;

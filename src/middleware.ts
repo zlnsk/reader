@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-// @ts-ignore — provided by the shared-auth module (see README setup)
+// @ts-ignore — provided by LXC 106 symlink ./node_modules/shared-auth -> .
 import { verifySessionEdge, canonicalEmail } from "shared-auth/edge";
 
 const SESSION_SECRET = process.env.OTP_SESSION_SECRET || "";

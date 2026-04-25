@@ -1,5 +1,5 @@
 // Ambient module declaration for the shared-ai package.
-// Resolved via the SHARED_MODULES_DIR symlink set up in postinstall.
+// On LXC 106, this resolves to . (symlinked into
 // node_modules/shared-ai by the postinstall hook). On CI the symlink
 // target doesn't exist — this file makes tsc happy without needing
 // the runtime package to be installed.

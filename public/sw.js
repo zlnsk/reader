@@ -1,5 +1,5 @@
 // Reader service worker — offline-first for shell & book content
-const VERSION = "reader-v13-20260421-offline";
+const VERSION = "reader-v14-20260422-progress-queue";
 const SHELL_CACHE = `${VERSION}-shell`;
 const BOOK_CACHE = `${VERSION}-books`;
 const BP = "/Reader";
@@ -52,6 +52,29 @@ self.addEventListener("fetch", (event) => {
   }
   if (isLibraryRoot) {
     event.respondWith(networkFirst(req, SHELL_CACHE));
+    return;
+  }
+
+  // Navigation to any other Reader page (e.g. /Reader/search, /Reader/upload,
+  // /Reader/settings): try network first, fall back to the cached library
+  // shell so offline users see the app instead of the Chrome dino.
+  if (req.mode === "navigate") {
+    event.respondWith(
+      (async () => {
+        try {
+          const fresh = await fetch(req);
+          if (fresh && fresh.ok) {
+            const cache = await caches.open(SHELL_CACHE);
+            cache.put(req, fresh.clone());
+          }
+          return fresh;
+        } catch {
+          const cache = await caches.open(SHELL_CACHE);
+          const cached = (await cache.match(req)) || (await cache.match(`${BP}/`));
+          return cached || new Response("Offline", { status: 503 });
+        }
+      })()
+    );
     return;
   }
 });

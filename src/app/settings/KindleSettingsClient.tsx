@@ -79,7 +79,7 @@ export default function KindleSettingsClient({ initialEmail }: { initialEmail: s
           . It looks like <code>yourname_abc123@kindle.com</code>.
         </li>
         <li>
-          Add <code>noreply@your-domain.example</code> to your{" "}
+          Add <code>noreply@mail.example.com</code> to your{" "}
           <a
             href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
             target="_blank"

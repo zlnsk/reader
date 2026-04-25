@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { apiFetch } from "@/lib/csrf-client";
 import PrefsSheet, { type Prefs, DEFAULT_PREFS } from "./PrefsSheet";
 import AudioPlayer, { type Voice } from "./AudioPlayer";
+import { attachProgressDrainer, sendProgress } from "@/lib/progress-queue";
 
 const BP = process.env.NEXT_PUBLIC_BASE_PATH || "/Reader";
 
@@ -287,14 +288,17 @@ export default function Reader({
     return () => window.clearTimeout(handle);
   }, [scrollPct, prefs.mode, chapterIdx, chapters.length]);
 
-  // Persist progress.
+  // Persist progress — queued in localStorage when offline, drained on reconnect.
+  useEffect(() => {
+    attachProgressDrainer();
+  }, []);
   useEffect(() => {
     const t = setTimeout(() => {
-      apiFetch(`${BP}/api/progress`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bookId, chapter_idx: chapterIdx, paragraph_idx: paragraphIdxRef.current }),
-      }).catch(() => {});
+      sendProgress({
+        bookId,
+        chapter_idx: chapterIdx,
+        paragraph_idx: paragraphIdxRef.current,
+      });
     }, 800);
     return () => clearTimeout(t);
   }, [bookId, chapterIdx, pageIdx, scrollPct]);
